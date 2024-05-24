@@ -1,6 +1,8 @@
-from ultralytics import YOLO 
+import streamlit as st
 import cv2
-import math 
+import numpy as np
+from ultralytics import YOLO
+import math
 
 # Démarrer la webcam
 cap = cv2.VideoCapture(0)
@@ -22,12 +24,20 @@ classNames = ["person", "bicycle", "car", "motorbike", "aeroplane", "bus", "trai
               "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors",
               "teddy bear", "hair drier", "toothbrush"]
 
-while True:
+st.title("Détection d'objets avec YOLO et Streamlit")
+
+# Démarrer la capture vidéo
+run = st.checkbox('Lancer la détection')
+
+# Afficher le flux vidéo
+FRAME_WINDOW = st.image([])
+
+while run:
     success, img = cap.read()
 
     # Vérifier si l'image a été capturée correctement
     if not success:
-        print("Erreur de capture d'image")
+        st.error("Erreur de capture d'image")
         continue
 
     results = model(img, stream=True)
@@ -61,9 +71,8 @@ while True:
 
             cv2.putText(img, classNames[cls], org, font, fontScale, color, thickness)
 
-    cv2.imshow('Webcam', img)
-    if cv2.waitKey(1) == ord('q'):
-        break
+    # Convertir l'image pour l'affichage dans Streamlit
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    FRAME_WINDOW.image(img)
 
 cap.release()
-cv2.destroyAllWindows()
