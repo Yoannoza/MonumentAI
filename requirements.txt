@@ -3,3 +3,6 @@ ultralytics
 opencv-python
 streamlit_webrtc
 matplotlib
+supervision
+av
+numpy

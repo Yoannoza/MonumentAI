@@ -1,114 +1,89 @@
-# import streamlit as st
-# import cv2
-# import numpy as np
-# from ultralytics import YOLO
-# import math
+"""Object detection demo with MobileNet SSD.
+This model and code are based on
+https://github.com/robmarkcole/object-detection-app
+"""
 
-# # Démarrer la webcam
-# cap = cv2.VideoCapture(0)
-# cap.set(3, 640)  # Largeur de la fenêtre de capture
-# cap.set(4, 480)  # Hauteur de la fenêtre de capture
-
-# # Modèle
-# model = YOLO("yolo-Weights/yolov8n.pt")
-
-# # Classes d'objets
-# classNames = ["person", "bicycle", "car", "motorbike", "aeroplane", "bus", "train", "truck", "boat",
-#               "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat",
-#               "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella",
-#               "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard", "sports ball", "kite", "baseball bat",
-#               "baseball glove", "skateboard", "surfboard", "tennis racket", "bottle", "wine glass", "cup",
-#               "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange", "broccoli",
-#               "carrot", "hot dog", "pizza", "donut", "cake", "chair", "sofa", "pottedplant", "bed",
-#               "diningtable", "toilet", "tvmonitor", "laptop", "mouse", "remote", "keyboard", "cell phone",
-#               "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors",
-#               "teddy bear", "hair drier", "toothbrush"]
-
-# st.title("Détection d'objets avec YOLO et Streamlit")
-
-# # Démarrer la capture vidéo
-# run = st.checkbox('Lancer la détection')
-
-# # Afficher le flux vidéo
-# FRAME_WINDOW = st.image([])
-
-# while run:
-#     success, img = cap.read()
-
-#     # Vérifier si l'image a été capturée correctement
-#     if not success:
-#         st.error("Erreur de capture d'image")
-#         continue
-
-#     results = model(img, stream=True)
-
-#     # Coordonnées
-#     for r in results:
-#         boxes = r.boxes
-
-#         for box in boxes:
-#             # Boîte englobante
-#             x1, y1, x2, y2 = box.xyxy[0]
-#             x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)  # Convertir en valeurs entières
-
-#             # Placer la boîte dans l'image
-#             cv2.rectangle(img, (x1, y1), (x2, y2), (255, 0, 255), 3)
-
-#             # Confiance
-#             confidence = math.ceil((box.conf[0] * 100)) / 100
-#             print("Confidence --->", confidence)
-
-#             # Nom de la classe
-#             cls = int(box.cls[0])
-#             print("Class name -->", classNames[cls])
-
-#             # Détails de l'objet
-#             org = [x1, y1]
-#             font = cv2.FONT_HERSHEY_SIMPLEX
-#             fontScale = 1
-#             color = (255, 0, 0)
-#             thickness = 2
-
-#             cv2.putText(img, classNames[cls], org, font, fontScale, color, thickness)
-
-#     # Convertir l'image pour l'affichage dans Streamlit
-#     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-#     FRAME_WINDOW.image(img)
-
-# cap.release()
-
-
-import threading
-
+import av
 import cv2
+import numpy as np
+import supervision as sv
+from ultralytics import YOLO
 import streamlit as st
-from matplotlib import pyplot as plt
-
-from streamlit_webrtc import webrtc_streamer
-
-lock = threading.Lock()
-img_container = {"img": None}
+from streamlit_webrtc import WebRtcMode, webrtc_streamer
 
 
-def video_frame_callback(frame):
-    img = frame.to_ndarray(format="bgr24")
-    with lock:
-        img_container["img"] = img
+ZONE_POLYGON = np.array([
+    [0, 0],
+    [0.5, 0],
+    [0.5, 1],
+    [0, 1]
+])
+
+model = YOLO("yolov8l.pt")
+
+box_annotator = sv.BoxAnnotator(
+    thickness=2,
+    text_thickness=2,
+    text_scale=1
+)
+
+zone_polygon = (ZONE_POLYGON * np.array(args.webcam_resolution)).astype(int)
+zone = sv.PolygonZone(polygon=zone_polygon, frame_resolution_wh=tuple(args.webcam_resolution))
+zone_annotator = sv.PolygonZoneAnnotator(
+    zone=zone, 
+    color=sv.Color.red(),
+    thickness=2,
+    text_thickness=4,
+    text_scale=2
+
+
+def video_frame_callback(frame: av.VideoFrame) -> av.VideoFrame:
+
+    result = model(frame, agnostic_nms=True)[0]
+    detections = sv.Detections.from_yolov8(result)
+    labels = [
+        f"{model.model.names[class_id]} {confidence:0.2f}"
+        for _, confidence, class_id, _
+        in detections
+    ]
+    frame = box_annotator.annotate(
+        scene=frame, 
+        detections=detections, 
+        labels=labels
+    )
+
+    zone.trigger(detections=detections)
+    frame = zone_annotator.annotate(scene=frame)    
 
     return frame
 
 
-ctx = webrtc_streamer(key="example", video_frame_callback=video_frame_callback)
+webrtc_ctx = webrtc_streamer(
+    key="object-detection",
+    mode=WebRtcMode.SENDRECV,
+    rtc_configuration={
+        "iceServers": get_ice_servers(),
+        "iceTransportPolicy": "relay",
+    },
+    video_frame_callback=video_frame_callback,
+    media_stream_constraints={"video": True, "audio": False},
+    async_processing=True,
+)
 
-fig_place = st.empty()
-fig, ax = plt.subplots(1, 1)
+if st.checkbox("Show the detected labels", value=True):
+    if webrtc_ctx.state.playing:
+        labels_placeholder = st.empty()
+        # NOTE: The video transformation with object detection and
+        # this loop displaying the result labels are running
+        # in different threads asynchronously.
+        # Then the rendered video frames and the labels displayed here
+        # are not strictly synchronized.
+        while True:
+            result = result_queue.get()
+            labels_placeholder.table(result)
 
-while ctx.state.playing:
-    with lock:
-        img = img_container["img"]
-    if img is None:
-        continue
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    ax.cla()
-    ax.hist(gray.ravel(), 256, [0, 256])
-    fig_place.pyplot(fig)
+st.markdown(
+    "This demo uses a model and code from "
+    "https://github.com/robmarkcole/object-detection-app. "
+    "Many thanks to the project."
+)
