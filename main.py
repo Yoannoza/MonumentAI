@@ -31,6 +31,7 @@ zone_polygon = (ZONE_POLYGON).astype(int)
 zone = sv.PolygonZone(polygon=zone_polygon, )
 zone_annotator = sv.PolygonZoneAnnotator(
     zone=zone, 
+    color=sv.Color.BLACK, 
     thickness=2,
     text_thickness=4,
     text_scale=2
