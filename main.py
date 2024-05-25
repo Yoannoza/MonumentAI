@@ -28,7 +28,7 @@ box_annotator = sv.BoxAnnotator(
 )
 
 zone_polygon = (ZONE_POLYGON).astype(int)
-zone = sv.PolygonZone(polygon=zone_polygon, frame_resolution_wh=tuple(args.webcam_resolution))
+zone = sv.PolygonZone(polygon=zone_polygon, )
 zone_annotator = sv.PolygonZoneAnnotator(
     zone=zone, 
     color=sv.Color.red(),
