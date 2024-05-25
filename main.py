@@ -35,6 +35,7 @@ zone_annotator = sv.PolygonZoneAnnotator(
     thickness=2,
     text_thickness=4,
     text_scale=2
+)
 
 
 def video_frame_callback(frame: av.VideoFrame) -> av.VideoFrame:
