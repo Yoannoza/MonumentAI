@@ -28,7 +28,7 @@ if uploaded_file is not None:
     results = model("uploaded_image.jpg")
     
     # Sauvegarder le résultat
-    results.save("result.jpg")
+    results[0].save("result.jpg")
     
     # Afficher le résultat
     result_image = Image.open("result.jpg")
