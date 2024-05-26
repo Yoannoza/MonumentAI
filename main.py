@@ -7,7 +7,7 @@ from io import BytesIO
 # Charger le modèle YOLO
 model = YOLO("yolov8n.pt")  # charger un modèle officiel
 
-st.title("Détection d/'objets avec YOLOv8")
+st.title("Détection d'objets avec YOLOv8")
 
 # Uploader une image
 uploaded_file = st.file_uploader("Choisissez une image...", type=["jpg", "jpeg", "png"])
