@@ -1,8 +1,6 @@
 streamlit
 ultralytics
 opencv-python
-streamlit_webrtc
-matplotlib
-supervision
-av
-numpy
+PIL
+io
+requests
